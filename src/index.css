@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --calm-bg: #FAF9F6;
+    --calm-surface: #FFFFFF;
+    --calm-surface-variant: #F2F1EC;
+    --calm-text: #1E2022;
+    --calm-text-secondary: #686E74;
+    --calm-text-tertiary: #9EA4AA;
+    --calm-border: #E8E7E2;
+    --calm-border-subtle: #F0EFEA;
+    --calm-accent: #222831;
+    --calm-accent-secondary: #393E46;
+    --calm-on-accent: #FFFFFF;
+    --like-active: #D9453B;
+    --like-inactive: #757D86;
+    --calm-error: #B3261E;
+    --calm-success: #2E7D32;
+    --calm-warning: #E65100;
+  }
+
+  .dark {
+    --calm-bg: #121316;
+    --calm-surface: #1A1C20;
+    --calm-surface-variant: #24272C;
+    --calm-text: #F0EFEA;
+    --calm-text-secondary: #A5ABB2;
+    --calm-text-tertiary: #8E959E;
+    --calm-border: #353940;
+    --calm-border-subtle: #23262B;
+    --calm-accent: #F0EFEA;
+    --calm-accent-secondary: #8E959E;
+    --calm-on-accent: #141517;
+    --like-active: #D9453B;
+    --like-inactive: #8E959E;
+    --calm-error: #EF5350;
+    --calm-success: #81C784;
+    --calm-warning: #FFB74D;
+  }
+
+  body {
+    background-color: var(--calm-bg);
+    color: var(--calm-text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom utility classes referencing the exact Android palette */
+.bg-calm-bg { background-color: var(--calm-bg); }
+.bg-calm-surface { background-color: var(--calm-surface); }
+.bg-calm-surface-variant { background-color: var(--calm-surface-variant); }
+.bg-calm-accent { background-color: var(--calm-accent); }
+.text-calm-text { color: var(--calm-text); }
+.text-calm-secondary { color: var(--calm-text-secondary); }
+.text-calm-tertiary { color: var(--calm-text-tertiary); }
+.text-calm-accent { color: var(--calm-accent); }
+.text-calm-on-accent { color: var(--calm-on-accent); }
+.text-calm-error { color: var(--calm-error); }
+.text-calm-success { color: var(--calm-success); }
+.text-calm-warning { color: var(--calm-warning); }
+.text-like-active { color: var(--like-active); }
+.text-like-inactive { color: var(--like-inactive); }
+.border-calm-border { border-color: var(--calm-border); }
+.border-calm-subtle { border-color: var(--calm-border-subtle); }
+.border-calm-error { border-color: var(--calm-error); }
+
+/* Focus outlines for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--calm-accent);
+  outline-offset: 2px;
+}
