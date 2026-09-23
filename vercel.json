@@ -1,0 +1,9 @@
+{
+  "name": "anubhavliveitshareit",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
