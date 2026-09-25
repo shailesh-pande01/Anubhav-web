@@ -27,19 +27,127 @@ export interface RouteState {
   params?: Record<string, string>;
 }
 
-const AppContent: React.FC = () => {
-  const { user, profile, isLoading, refreshProfile } = useAuth();
-
-  // Route State
-  const [currentRoute, setCurrentRoute] = useState<RouteState>(() => {
-    // Check if recovery link was opened
-    const hash = window.location.hash;
-    const search = window.location.search;
-    if (hash.includes('type=recovery') || hash.includes('access_token=') || search.includes('type=recovery')) {
-      return { screen: 'reset_password' };
+function sanitizeReturnTo(path?: string | null): string {
+  if (!path) return '/';
+  const trimmed = path.trim();
+  // Strictly allow relative paths starting with a single '/'
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\') && !trimmed.includes(':')) {
+    const validPrefixes = ['/create', '/profile', '/settings', '/edit-profile', '/admin', '/posts', '/'];
+    if (validPrefixes.some((p) => trimmed === p || trimmed.startsWith(p + '?') || trimmed.startsWith(p + '/'))) {
+      return trimmed;
     }
-    return { screen: 'main' };
-  });
+  }
+  return '/';
+}
+
+function routeFromLocation(): RouteState {
+  const hash = window.location.hash;
+  const search = window.location.search;
+  const pathname = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/';
+  const searchParams = new URLSearchParams(search);
+
+  if (hash.includes('type=recovery') || hash.includes('access_token=') || search.includes('type=recovery')) {
+    return { screen: 'reset_password' };
+  }
+
+  if (pathname === '/login' || pathname === '/auth') {
+    const rawReturnTo = searchParams.get('returnTo');
+    const returnTo = sanitizeReturnTo(rawReturnTo);
+    return { screen: 'auth', params: returnTo !== '/' ? { returnTo } : undefined };
+  }
+
+  if (pathname === '/forgot-password') {
+    return { screen: 'forgot_password' };
+  }
+
+  if (pathname === '/reset-password') {
+    return { screen: 'reset_password' };
+  }
+
+  if (pathname === '/create') {
+    return { screen: 'create' };
+  }
+
+  if (pathname === '/profile') {
+    return { screen: 'profile' };
+  }
+
+  if (pathname === '/settings' || pathname === '/edit-profile') {
+    return { screen: 'edit_profile' };
+  }
+
+  if (pathname === '/admin' || pathname === '/admin/dashboard') {
+    return { screen: 'admin_dashboard' };
+  }
+
+  if (pathname === '/admin/reports') {
+    return { screen: 'admin_reports' };
+  }
+
+  if (pathname === '/admin/report-detail') {
+    return { screen: 'admin_report_detail', params: { reportId: searchParams.get('reportId') || '' } };
+  }
+
+  if (pathname === '/admin/users') {
+    return { screen: 'admin_users' };
+  }
+
+  if (pathname === '/admin/user-detail') {
+    return { screen: 'admin_user_detail', params: { userId: searchParams.get('userId') || '' } };
+  }
+
+  if (pathname === '/admin/posts') {
+    return { screen: 'admin_posts' };
+  }
+
+  if (pathname === '/admin/moderation-history' || pathname === '/admin/history') {
+    return { screen: 'admin_moderation_history' };
+  }
+
+  return { screen: 'main' };
+}
+
+function locationFromRoute(route: RouteState): string {
+  switch (route.screen) {
+    case 'auth':
+      return route.params?.returnTo
+        ? `/login?returnTo=${encodeURIComponent(route.params.returnTo)}`
+        : '/login';
+    case 'forgot_password':
+      return '/forgot-password';
+    case 'reset_password':
+      return '/reset-password';
+    case 'create':
+      return '/create';
+    case 'profile':
+      return '/profile';
+    case 'edit_profile':
+      return '/settings';
+    case 'admin_dashboard':
+      return '/admin';
+    case 'admin_reports':
+      return '/admin/reports';
+    case 'admin_report_detail':
+      return `/admin/report-detail?reportId=${encodeURIComponent(route.params?.reportId || '')}`;
+    case 'admin_users':
+      return '/admin/users';
+    case 'admin_user_detail':
+      return `/admin/user-detail?userId=${encodeURIComponent(route.params?.userId || '')}`;
+    case 'admin_posts':
+      return '/admin/posts';
+    case 'admin_moderation_history':
+      return '/admin/moderation-history';
+    case 'main':
+    default:
+      return '/';
+  }
+}
+
+const AppContent: React.FC = () => {
+  const { user, profile, isAdmin, isLoading, refreshProfile } = useAuth();
+
+  // Route State initialized from current browser URL
+  const [currentRoute, setCurrentRoute] = useState<RouteState>(() => routeFromLocation());
 
   // History listener for browser back/forward buttons
   useEffect(() => {
@@ -47,31 +155,51 @@ const AppContent: React.FC = () => {
       if (event.state && event.state.screen) {
         setCurrentRoute(event.state as RouteState);
       } else {
-        // Fallback to main if authenticated or auth if not
-        setCurrentRoute({ screen: user ? 'main' : 'auth' });
+        setCurrentRoute(routeFromLocation());
       }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user]);
+  }, []);
 
-  // Navigate helper that pushes state to browser history
-  const navigate = useCallback((screen: string, params?: Record<string, string>) => {
+  // Navigate helper that synchronizes browser URL and history
+  const navigate = useCallback((screen: string, params?: Record<string, string>, replace: boolean = false) => {
     const newRoute: RouteState = { screen, params };
+    const targetUrl = locationFromRoute(newRoute);
     setCurrentRoute(newRoute);
-    window.history.pushState(newRoute, '', window.location.pathname);
+    if (replace) {
+      window.history.replaceState(newRoute, '', targetUrl);
+    } else {
+      window.history.pushState(newRoute, '', targetUrl);
+    }
   }, []);
 
   const goBack = useCallback(() => {
     if (window.history.length > 1) {
       window.history.back();
     } else {
-      navigate(user ? 'main' : 'auth');
+      navigate('main');
     }
-  }, [navigate, user]);
+  }, [navigate]);
 
-  // 1. Initial authentication loading state
+  const handleAuthSuccess = async (returnTo?: string) => {
+    await refreshProfile();
+    const safePath = sanitizeReturnTo(returnTo);
+    if (safePath === '/create') {
+      navigate('create', undefined, true);
+    } else if (safePath === '/profile') {
+      navigate('profile', undefined, true);
+    } else if (safePath === '/settings' || safePath === '/edit-profile') {
+      navigate('edit_profile', undefined, true);
+    } else if (safePath.startsWith('/admin')) {
+      navigate('admin_dashboard', undefined, true);
+    } else {
+      navigate('main', undefined, true);
+    }
+  };
+
+  // 1. Initial authentication loading state (clean bootstrap state)
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[var(--calm-bg)] text-[var(--calm-text-primary)] flex items-center justify-center">
@@ -85,7 +213,7 @@ const AppContent: React.FC = () => {
     return <AccountSuspendedPage />;
   }
 
-  // 3. Password recovery route (accessible whether authenticated or during recovery flow)
+  // 3. Password recovery route
   if (currentRoute.screen === 'reset_password') {
     return (
       <ResetPasswordPage
@@ -102,7 +230,7 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // 4. Unauthenticated views
+  // 4. UNAUTHENTICATED / GUEST EXPERIENCE
   if (!user) {
     if (currentRoute.screen === 'forgot_password') {
       return (
@@ -112,19 +240,114 @@ const AppContent: React.FC = () => {
       );
     }
 
+    if (currentRoute.screen === 'auth') {
+      return (
+        <AuthPage
+          onAuthSuccess={() => handleAuthSuccess(currentRoute.params?.returnTo)}
+          onNavigateToForgotPassword={() => navigate('forgot_password')}
+          onBack={() => navigate('main')}
+        />
+      );
+    }
+
+    // Protected routes: redirect guest to login with safe returnTo
+    if (currentRoute.screen === 'create') {
+      return (
+        <AuthPage
+          onAuthSuccess={() => handleAuthSuccess('/create')}
+          onNavigateToForgotPassword={() => navigate('forgot_password')}
+          onBack={() => navigate('main')}
+        />
+      );
+    }
+
+    if (currentRoute.screen === 'profile') {
+      return (
+        <AuthPage
+          onAuthSuccess={() => handleAuthSuccess('/profile')}
+          onNavigateToForgotPassword={() => navigate('forgot_password')}
+          onBack={() => navigate('main')}
+        />
+      );
+    }
+
+    if (currentRoute.screen === 'edit_profile') {
+      return (
+        <AuthPage
+          onAuthSuccess={() => handleAuthSuccess('/settings')}
+          onNavigateToForgotPassword={() => navigate('forgot_password')}
+          onBack={() => navigate('main')}
+        />
+      );
+    }
+
+    if (currentRoute.screen.startsWith('admin')) {
+      return (
+        <AuthPage
+          onAuthSuccess={() => handleAuthSuccess('/admin')}
+          onNavigateToForgotPassword={() => navigate('forgot_password')}
+          onBack={() => navigate('main')}
+        />
+      );
+    }
+
+    // Default Guest View: Root Public Feed
     return (
-      <AuthPage
-        onAuthSuccess={async () => {
-          await refreshProfile();
-          navigate('main');
-        }}
-        onNavigateToForgotPassword={() => navigate('forgot_password')}
+      <MainScaffold
+        isGuest={true}
+        onSignIn={() => navigate('auth')}
+        onNavigateToUserProfile={() => {}}
+        onNavigateToEditProfile={() => navigate('auth', { returnTo: '/settings' })}
+        onNavigateToEditPost={() => {}}
+        onNavigateToAdminDashboard={() => navigate('auth', { returnTo: '/admin' })}
+        onLogout={() => {}}
       />
     );
   }
 
-  // 5. Authenticated views & sub-screens
+  // 5. AUTHENTICATED EXPERIENCE
+  // If an authenticated user visits /login or /auth, return them to main
+  if (currentRoute.screen === 'auth') {
+    return (
+      <MainScaffold
+        isGuest={false}
+        initialTab="POSTS"
+        onNavigateToUserProfile={(userId) => navigate('user_profile', { userId })}
+        onNavigateToEditProfile={() => navigate('edit_profile')}
+        onNavigateToEditPost={(postId) => navigate('edit_post', { postId })}
+        onNavigateToAdminDashboard={() => navigate('admin_dashboard')}
+        onLogout={() => navigate('auth')}
+      />
+    );
+  }
+
   switch (currentRoute.screen) {
+    case 'create':
+      return (
+        <MainScaffold
+          isGuest={false}
+          initialTab="CREATE"
+          onNavigateToUserProfile={(userId) => navigate('user_profile', { userId })}
+          onNavigateToEditProfile={() => navigate('edit_profile')}
+          onNavigateToEditPost={(postId) => navigate('edit_post', { postId })}
+          onNavigateToAdminDashboard={() => navigate('admin_dashboard')}
+          onLogout={() => navigate('auth')}
+        />
+      );
+
+    case 'profile':
+      return (
+        <MainScaffold
+          isGuest={false}
+          initialTab="PROFILE"
+          onNavigateToUserProfile={(userId) => navigate('user_profile', { userId })}
+          onNavigateToEditProfile={() => navigate('edit_profile')}
+          onNavigateToEditPost={(postId) => navigate('edit_post', { postId })}
+          onNavigateToAdminDashboard={() => navigate('admin_dashboard')}
+          onLogout={() => navigate('auth')}
+        />
+      );
+
     case 'edit_profile':
       return (
         <EditProfilePage
@@ -151,8 +374,20 @@ const AppContent: React.FC = () => {
         />
       );
 
-    // Admin Flow
+    // Admin Flow (Protected by isAdmin)
     case 'admin_dashboard':
+      if (!isAdmin) {
+        return (
+          <MainScaffold
+            isGuest={false}
+            onNavigateToUserProfile={(userId) => navigate('user_profile', { userId })}
+            onNavigateToEditProfile={() => navigate('edit_profile')}
+            onNavigateToEditPost={(postId) => navigate('edit_post', { postId })}
+            onNavigateToAdminDashboard={() => navigate('admin_dashboard')}
+            onLogout={() => navigate('auth')}
+          />
+        );
+      }
       return (
         <AdminDashboardPage
           onBack={goBack}
@@ -164,6 +399,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_reports':
+      if (!isAdmin) return null;
       return (
         <AdminReportsPage
           onBack={goBack}
@@ -172,6 +408,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_report_detail':
+      if (!isAdmin) return null;
       return (
         <AdminReportDetailPage
           reportId={currentRoute.params?.reportId || ''}
@@ -180,6 +417,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_users':
+      if (!isAdmin) return null;
       return (
         <AdminUsersPage
           onBack={goBack}
@@ -188,6 +426,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_user_detail':
+      if (!isAdmin) return null;
       return (
         <AdminUserDetailPage
           userId={currentRoute.params?.userId || ''}
@@ -196,6 +435,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_posts':
+      if (!isAdmin) return null;
       return (
         <AdminPostsPage
           onBack={goBack}
@@ -203,6 +443,7 @@ const AppContent: React.FC = () => {
       );
 
     case 'admin_moderation_history':
+      if (!isAdmin) return null;
       return (
         <AdminAuditLogsPage
           onBack={goBack}
@@ -213,6 +454,7 @@ const AppContent: React.FC = () => {
     default:
       return (
         <MainScaffold
+          isGuest={false}
           onNavigateToUserProfile={(userId) => navigate('user_profile', { userId })}
           onNavigateToEditProfile={() => navigate('edit_profile')}
           onNavigateToEditPost={(postId) => navigate('edit_post', { postId })}

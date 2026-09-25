@@ -4,16 +4,18 @@ import { profileService } from '../../services/profileService';
 import { CalmButton } from '../../components/common/CalmButton';
 import { CalmTextField } from '../../components/common/CalmTextField';
 import { ThemeToggle } from '../../components/common/ThemeToggle';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 interface AuthPageProps {
   onAuthSuccess: () => void;
   onNavigateToForgotPassword: () => void;
+  onBack?: () => void;
 }
 
 export const AuthPage: React.FC<AuthPageProps> = ({
   onAuthSuccess,
   onNavigateToForgotPassword,
+  onBack,
 }) => {
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [emailOrUsername, setEmailOrUsername] = useState('');
@@ -144,6 +146,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-calm-bg px-4 py-8 md:py-12 transition-colors">
+      {/* Top Bar Navigation: Back to feed and Theme Toggle */}
+      {onBack && (
+        <div className="absolute top-6 left-6">
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-[13.5px] font-medium text-[var(--calm-text-secondary)] hover:bg-[var(--calm-surface)] hover:text-[var(--calm-text-primary)] transition-colors"
+          >
+            <ArrowLeft size={18} />
+            <span>Feed</span>
+          </button>
+        </div>
+      )}
+
       {/* Desktop Theme Toggle in top corner */}
       <div className="absolute top-6 right-6 hidden md:block">
         <ThemeToggle />
@@ -152,8 +168,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       <div className="w-full max-w-[420px] md:max-w-[450px] md:p-8 md:rounded-2xl md:border md:border-[var(--calm-border-subtle)] md:bg-[var(--calm-surface)] md:shadow-2xs transition-colors">
         {/* Brand Header */}
         <div className="flex flex-col">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Anubhav Logo" className="h-9 w-9 rounded-lg object-contain" />
+          <div
+            onClick={onBack}
+            className={`flex items-center gap-3 ${onBack ? 'cursor-pointer group' : ''}`}
+          >
+            <img
+              src="/logo.png"
+              alt="Anubhav Logo"
+              className="h-9 w-9 rounded-lg object-contain transition-transform group-hover:scale-105"
+            />
             <h1 className="text-[30px] font-light tracking-[-0.5px] text-calm-text">
               Anubhav
             </h1>

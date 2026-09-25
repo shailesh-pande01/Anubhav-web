@@ -14,6 +14,9 @@ interface MainScaffoldProps {
   onNavigateToEditPost: (postId: string) => void;
   onNavigateToAdminDashboard: () => void;
   onLogout: () => void;
+  isGuest?: boolean;
+  onSignIn?: () => void;
+  initialTab?: BottomTab;
 }
 
 export const MainScaffold: React.FC<MainScaffoldProps> = ({
@@ -22,8 +25,11 @@ export const MainScaffold: React.FC<MainScaffoldProps> = ({
   onNavigateToEditPost,
   onNavigateToAdminDashboard,
   onLogout,
+  isGuest = false,
+  onSignIn,
+  initialTab = 'POSTS',
 }) => {
-  const [selectedTab, setSelectedTab] = useState<BottomTab>('POSTS');
+  const [selectedTab, setSelectedTab] = useState<BottomTab>(isGuest ? 'POSTS' : initialTab);
 
   return (
     <div className="min-h-screen bg-[var(--calm-bg)] text-[var(--calm-text-primary)] flex flex-col justify-between transition-colors">
@@ -38,25 +44,32 @@ export const MainScaffold: React.FC<MainScaffoldProps> = ({
               onNavigateToEditProfile={onNavigateToEditProfile}
               onNavigateToAdminDashboard={onNavigateToAdminDashboard}
               onLogout={onLogout}
+              isGuest={isGuest}
+              onSignIn={onSignIn}
             />
           </div>
 
           {/* Center Column: Active View (Feed / Create / Profile) */}
-          <main className="flex-1 min-w-0 max-w-[680px] w-full pb-20 md:pb-6 pt-0 md:pt-4">
+          <main
+            className={`flex-1 min-w-0 max-w-[680px] w-full pt-0 md:pt-4 ${
+              isGuest ? 'pb-6' : 'pb-20 md:pb-6'
+            }`}
+          >
             {selectedTab === 'POSTS' && (
               <FeedPage
                 onNavigateToProfile={onNavigateToUserProfile}
                 onNavigateToEditPost={onNavigateToEditPost}
+                onSignIn={onSignIn}
               />
             )}
 
-            {selectedTab === 'CREATE' && (
+            {!isGuest && selectedTab === 'CREATE' && (
               <CreatePostPage
                 onPostCreated={() => setSelectedTab('POSTS')}
               />
             )}
 
-            {selectedTab === 'PROFILE' && (
+            {!isGuest && selectedTab === 'PROFILE' && (
               <ProfilePage
                 onNavigateToEditProfile={onNavigateToEditProfile}
                 onNavigateToEditPost={onNavigateToEditPost}
@@ -77,11 +90,13 @@ export const MainScaffold: React.FC<MainScaffoldProps> = ({
         </div>
       </div>
 
-      {/* Mobile-Only Bottom Navigation (Hidden on desktop via md:hidden) */}
-      <CalmBottomBar
-        selectedTab={selectedTab}
-        onTabSelected={setSelectedTab}
-      />
+      {/* Mobile-Only Bottom Navigation (Hidden on desktop via md:hidden, and hidden completely for guests) */}
+      {!isGuest && (
+        <CalmBottomBar
+          selectedTab={selectedTab}
+          onTabSelected={setSelectedTab}
+        />
+      )}
     </div>
   );
 };

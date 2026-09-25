@@ -69,6 +69,142 @@ export const postService = {
     const fromIndex = page * pageSize;
     const toIndex = (page + 1) * pageSize - 1;
 
+    // 1. PUBLIC READ-ONLY GUEST FEED PATH
+    if (!currentUserId) {
+      // Primary: Secure RPC function exposing only published posts and public author attributes
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('get_public_posts', {
+          p_limit: pageSize,
+          p_offset: fromIndex,
+        });
+
+        if (!rpcError && rpcData && Array.isArray(rpcData)) {
+          const rpcRows = rpcData as Array<{
+            id: string;
+            user_id: string;
+            post_type: string;
+            content: string;
+            image_path: string | null;
+            created_at: string;
+            author_display_name: string;
+            author_username: string;
+            author_profile_image_url: string | null;
+          }>;
+
+          return rpcRows.map((row) => ({
+            id: row.id,
+            userId: row.user_id,
+            postType: (row.post_type?.toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT') as PostType,
+            content: row.content || '',
+            imagePath: row.image_path,
+            imageUrl: resolveImageUrl(row.image_path),
+            createdAt: row.created_at,
+            relativeTime: formatRelativeTime(row.created_at),
+            author: {
+              id: row.user_id,
+              username: row.author_username || 'user',
+              displayName: row.author_display_name || 'Anonymous',
+              bio: '',
+              location: '',
+              currentlyWorkingOn: '',
+              thingsIveDone: '',
+              profileImageUrl: row.author_profile_image_url || null,
+              accountStatus: 'ACTIVE',
+              restrictedUntil: null,
+              suspendedUntil: null,
+              statusReason: '',
+              createdAt: '',
+              updatedAt: '',
+            },
+            isLikedByCurrentUser: false,
+            isOwner: false,
+            isRemoved: false,
+            removalReason: null,
+            ownerLikeCount: null,
+          }));
+        }
+      } catch (rpcErr) {
+        console.warn('get_public_posts RPC fallback triggered:', rpcErr);
+      }
+
+      // Resilient fallback: Select strictly published posts and minimum public author fields
+      let guestQuery = supabase
+        .from('posts')
+        .select('id, user_id, post_type, content, image_path, is_removed, created_at, profiles(display_name, username, profile_image_url)')
+        .or('is_removed.eq.false,is_removed.is.null')
+        .order('created_at', { ascending: false })
+        .range(fromIndex, toIndex);
+
+      let { data: guestData, error: guestError } = await guestQuery;
+
+      if (guestError && guestError.message?.includes('profiles')) {
+        const guestRelQuery = supabase
+          .from('posts')
+          .select('id, user_id, post_type, content, image_path, is_removed, created_at, profiles!user_id(display_name, username, profile_image_url)')
+          .or('is_removed.eq.false,is_removed.is.null')
+          .order('created_at', { ascending: false })
+          .range(fromIndex, toIndex);
+        const guestRelRes = await guestRelQuery;
+        guestData = guestRelRes.data;
+        guestError = guestRelRes.error;
+      }
+
+      if (guestError) {
+        console.error('Error fetching public guest feed:', guestError);
+        throw new Error("Couldn't load posts. Please try again.");
+      }
+
+      const rawGuestPosts = (guestData || []) as unknown as Array<{
+        id: string;
+        user_id: string;
+        post_type: string;
+        content: string;
+        image_path: string | null;
+        is_removed: boolean | null;
+        created_at: string;
+        profiles: {
+          display_name?: string | null;
+          username?: string | null;
+          profile_image_url?: string | null;
+        } | null;
+      }>;
+
+      return rawGuestPosts
+        .filter((p) => p.is_removed !== true)
+        .map((dto) => ({
+          id: dto.id,
+          userId: dto.user_id,
+          postType: (dto.post_type?.toUpperCase() === 'IMAGE' ? 'IMAGE' : 'TEXT') as PostType,
+          content: dto.content || '',
+          imagePath: dto.image_path,
+          imageUrl: resolveImageUrl(dto.image_path),
+          createdAt: dto.created_at,
+          relativeTime: formatRelativeTime(dto.created_at),
+          author: {
+            id: dto.user_id,
+            username: dto.profiles?.username || 'user',
+            displayName: dto.profiles?.display_name || 'Anonymous',
+            bio: '',
+            location: '',
+            currentlyWorkingOn: '',
+            thingsIveDone: '',
+            profileImageUrl: dto.profiles?.profile_image_url || null,
+            accountStatus: 'ACTIVE',
+            restrictedUntil: null,
+            suspendedUntil: null,
+            statusReason: '',
+            createdAt: '',
+            updatedAt: '',
+          },
+          isLikedByCurrentUser: false,
+          isOwner: false,
+          isRemoved: false,
+          removalReason: null,
+          ownerLikeCount: null,
+        }));
+    }
+
+    // 2. AUTHENTICATED FEED PATH
     let query = supabase
       .from('posts')
       .select('*, profiles(*)')

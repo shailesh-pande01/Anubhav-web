@@ -3,6 +3,7 @@ import { CalmTopBar } from '../../components/common/CalmTopBar';
 import { CalmLoadingIndicator } from '../../components/common/CalmLoadingIndicator';
 import { CalmEmptyState } from '../../components/common/CalmEmptyState';
 import { CalmButton } from '../../components/common/CalmButton';
+import { ThemeToggle } from '../../components/common/ThemeToggle';
 import { PostItem } from '../../components/post/PostItem';
 import { ReportPostDialog } from '../../components/report/ReportPostDialog';
 import { postService } from '../../services/postService';
@@ -12,11 +13,13 @@ import { useAuth } from '../../context/AuthContext';
 interface FeedPageProps {
   onNavigateToProfile: (userId: string) => void;
   onNavigateToEditPost: (postId: string) => void;
+  onSignIn?: () => void;
 }
 
 export const FeedPage: React.FC<FeedPageProps> = ({
   onNavigateToProfile,
-  onNavigateToEditPost
+  onNavigateToEditPost,
+  onSignIn,
 }) => {
   const { user } = useAuth();
   const [posts, setPosts] = useState<PostWithAuthor[]>([]);
@@ -134,6 +137,22 @@ export const FeedPage: React.FC<FeedPageProps> = ({
         title="Anubhav"
         subtitle="Live it. Share it."
         className="md:hidden"
+        actions={
+          !user ? (
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              {onSignIn && (
+                <button
+                  type="button"
+                  onClick={onSignIn}
+                  className="rounded-lg px-2.5 py-1 text-[13.5px] font-medium text-[var(--calm-primary)] hover:bg-[var(--calm-surface-variant)] transition-colors"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          ) : undefined
+        }
       />
 
       {/* Desktop Feed Header */}
@@ -162,7 +181,7 @@ export const FeedPage: React.FC<FeedPageProps> = ({
           <div className="pt-20">
             <CalmEmptyState
               title="Nothing here yet."
-              subtitle="Create something worth sharing."
+              subtitle={user ? "Create something worth sharing." : undefined}
             />
           </div>
         ) : (
@@ -171,6 +190,8 @@ export const FeedPage: React.FC<FeedPageProps> = ({
               <PostItem
                 key={post.id}
                 post={post}
+                isGuest={!user}
+                onSignIn={onSignIn}
                 onLikeClick={() => handleToggleLike(post)}
                 onProfileClick={onNavigateToProfile}
                 onEditClick={() => onNavigateToEditPost(post.id)}

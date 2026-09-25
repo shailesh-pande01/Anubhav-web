@@ -11,6 +11,8 @@ interface PostItemProps {
   onEditClick?: () => void;
   onDeleteClick?: () => void;
   onReportClick?: () => void;
+  isGuest?: boolean;
+  onSignIn?: () => void;
   className?: string;
 }
 
@@ -21,11 +23,15 @@ export const PostItem: React.FC<PostItemProps> = ({
   onEditClick,
   onDeleteClick,
   onReportClick,
+  isGuest = false,
+  onSignIn,
   className = '',
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showGuestLikePrompt, setShowGuestLikePrompt] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const promptTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -42,6 +48,28 @@ export const PostItem: React.FC<PostItemProps> = ({
     };
   }, [showMenu]);
 
+  useEffect(() => {
+    return () => {
+      if (promptTimeoutRef.current) {
+        clearTimeout(promptTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleHeartClick = () => {
+    if (isGuest) {
+      setShowGuestLikePrompt(true);
+      if (promptTimeoutRef.current) {
+        clearTimeout(promptTimeoutRef.current);
+      }
+      promptTimeoutRef.current = setTimeout(() => {
+        setShowGuestLikePrompt(false);
+      }, 3500);
+      return;
+    }
+    onLikeClick();
+  };
+
   return (
     <article
       className={`flex w-full flex-col px-4 py-3 md:px-5 md:py-4 transition-colors md:hover:bg-[var(--calm-surface)]/40 md:rounded-2xl ${className}`}
@@ -53,14 +81,18 @@ export const PostItem: React.FC<PostItemProps> = ({
             imageUrl={post.author.profileImageUrl}
             name={post.author.displayName}
             size={38}
-            onClick={() => onProfileClick(post.userId)}
+            onClick={isGuest ? undefined : () => onProfileClick(post.userId)}
           />
 
           <div
-            onClick={() => onProfileClick(post.userId)}
-            className="flex flex-col cursor-pointer leading-none"
+            onClick={isGuest ? undefined : () => onProfileClick(post.userId)}
+            className={`flex flex-col leading-none ${isGuest ? '' : 'cursor-pointer'}`}
           >
-            <span className="text-[15px] md:text-[15.5px] font-semibold text-calm-text leading-tight hover:underline">
+            <span
+              className={`text-[15px] md:text-[15.5px] font-semibold text-calm-text leading-tight ${
+                isGuest ? '' : 'hover:underline'
+              }`}
+            >
               {post.author.displayName}
             </span>
             {post.relativeTime && (
@@ -71,18 +103,19 @@ export const PostItem: React.FC<PostItemProps> = ({
           </div>
         </div>
 
-        {/* Overflow Options Menu */}
-        <div className="relative" ref={menuRef}>
-          <button
-            type="button"
-            onClick={() => setShowMenu((prev) => !prev)}
-            aria-label="Post options"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-calm-tertiary transition-colors hover:bg-calm-surface-variant hover:text-calm-secondary active:scale-95"
-          >
-            <MoreVertical className="h-[18px] w-[18px]" />
-          </button>
+        {/* Overflow Options Menu (Only rendered for authenticated users) */}
+        {!isGuest && (
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setShowMenu((prev) => !prev)}
+              aria-label="Post options"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-calm-tertiary transition-colors hover:bg-calm-surface-variant hover:text-calm-secondary active:scale-95"
+            >
+              <MoreVertical className="h-[18px] w-[18px]" />
+            </button>
 
-          {showMenu && (
+            {showMenu && (
             <div className="absolute right-0 top-9 z-20 min-w-[140px] rounded-xl border border-calm-subtle bg-calm-surface py-1 shadow-md animate-in fade-in zoom-in-95 duration-100">
               {post.isOwner ? (
                 <>
@@ -130,6 +163,7 @@ export const PostItem: React.FC<PostItemProps> = ({
             </div>
           )}
         </div>
+      )}
       </div>
 
       {/* 2. Content */}
@@ -159,11 +193,33 @@ export const PostItem: React.FC<PostItemProps> = ({
         )}
 
         {/* 3. Footer: Calm Like Action */}
-        <div className="mt-2 md:mt-3 flex w-full items-center justify-end">
+        <div className="relative mt-2 md:mt-3 flex w-full items-center justify-end">
+          {showGuestLikePrompt && (
+            <div
+              className="absolute bottom-10 right-0 z-20 flex items-center gap-2 rounded-xl border border-[var(--calm-border-subtle)] bg-[var(--calm-surface)] px-3 py-1.5 shadow-md text-[12px] text-[var(--calm-text-secondary)] animate-in fade-in zoom-in-95 duration-150"
+              role="status"
+              aria-live="polite"
+            >
+              <span>Sign in to like posts</span>
+              {onSignIn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGuestLikePrompt(false);
+                    onSignIn();
+                  }}
+                  className="font-medium text-[var(--calm-primary)] hover:underline ml-0.5"
+                >
+                  Sign in
+                </button>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
-            onClick={onLikeClick}
-            aria-label={post.isLikedByCurrentUser ? 'Unlike' : 'Like'}
+            onClick={handleHeartClick}
+            aria-label={isGuest ? 'Sign in to like' : post.isLikedByCurrentUser ? 'Unlike' : 'Like'}
             className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-all hover:bg-calm-surface-variant active:scale-90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--calm-primary)]"
           >
             <Heart
@@ -177,7 +233,7 @@ export const PostItem: React.FC<PostItemProps> = ({
             {/* STRICT PRODUCT PRIVACY RULE:
                 Only display like count if current user is the owner of this post.
                 Normal users see ONLY the heart icon. */}
-            {post.isOwner && post.ownerLikeCount !== null && (
+            {!isGuest && post.isOwner && post.ownerLikeCount !== null && (
               <span className="text-[12px] font-medium text-calm-secondary">
                 {post.ownerLikeCount}
               </span>
